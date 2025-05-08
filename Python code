@@ -1,0 +1,55 @@
+import tkinter as tk
+from tkinter import scrolledtext
+from pygtail import Pygtail
+import threading
+import time
+import os
+
+class LogMonitorApp:
+    def __init__(self, root, log_file):
+        self.root = root
+        self.root.title("Windows Log File Monitor")
+        self.log_file = log_file
+
+        # Create a scrolled text widget
+        self.text_area = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=80, height=20)
+        self.text_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+        self.text_area.config(state=tk.DISABLED)
+
+        # Start monitoring the log file in a separate thread
+        self.stop_thread = False
+        self.monitor_thread = threading.Thread(target=self.monitor_log)
+        self.monitor_thread.daemon = True
+        self.monitor_thread.start()
+
+    def monitor_log(self):
+        log_file_exists = os.path.exists(self.log_file)
+        while not self.stop_thread:
+            if log_file_exists:
+                try:
+                    for line in Pygtail(self.log_file):
+                        self.append_log(line)
+                except Exception as e:
+                    self.append_log(f"Error reading log file: {e}\n")
+            else:
+                self.append_log(f"Log file not found: {self.log_file}\n")
+                log_file_exists = os.path.exists(self.log_file)  # Recheck for file existence
+            time.sleep(1)
+
+    def append_log(self, message):
+        self.text_area.config(state=tk.NORMAL)
+        self.text_area.insert(tk.END, message)
+        self.text_area.see(tk.END)
+        self.text_area.config(state=tk.DISABLED)
+
+    def on_close(self):
+        self.stop_thread = True
+        self.monitor_thread.join(timeout=1)  # Prevent blocking exit if thread hangs
+        self.root.destroy()
+
+if __name__ == "__main__":
+    log_file_path = "C:\\Logs\\system.log"  # Replace with your actual log file path
+    root = tk.Tk()
+    app = LogMonitorApp(root, log_file_path)
+    root.protocol("WM_DELETE_WINDOW", app.on_close)
+    root.mainloop()
